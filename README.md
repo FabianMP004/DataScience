@@ -1,6 +1,4 @@
-# Mi Repositorio
-
-Este repositorio contiene dos proyectos:
+# DATA SCIENCE
 
 ## 📂 [Proyecto 1](Proyecto1)
 
