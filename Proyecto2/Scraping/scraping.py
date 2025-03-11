@@ -11,7 +11,7 @@ def extract_value(text):
     return match.group(1) if match else "N/A"
 
 
-# Función para extraer el texto después de los dos puntos ":"
+# Función para extraer el texto después de los dos puntos":"
 def extract_full_text(text):
     return text.split(':')[-1].strip()
 
@@ -19,13 +19,12 @@ def extract_full_text(text):
 # Función para obtener los datos de una propiedad específica
 def data(url):
     try:
-        headers = {"User-Agent": "Mozilla/5.0"}  # Evita bloqueos por protección anti-bots
+        headers = {"User-Agent": "Mozilla/5.0"}
         req = requests.get(url, headers=headers, timeout=10)
-        req.raise_for_status()  # Lanza una excepción si hay errores HTTP
+        req.raise_for_status()
 
         soup = BeautifulSoup(req.content, "html.parser")
 
-        # Extraer detalles de la propiedad
         results = soup.find(id="accordion_prop_details")
         detalles_list = results.find_all("div", class_="listing_detail col-md-4") if results else []
 
@@ -35,7 +34,6 @@ def data(url):
         results3 = soup.find(id="all_wrapper")
         cat_list = results3.find_all("div", class_="property_title_label") if results3 else []
 
-        # Diccionario para almacenar los datos
         property_data = {
             "ID de la propiedad": "N/A",
             "Precio": "N/A",
@@ -48,7 +46,6 @@ def data(url):
             "URL": url
         }
 
-        # Recorrer los elementos de detalles_list y asignar los valores correctos
         for detail in detalles_list:
             text = detail.text.strip()
             if "Código" in text or "ID" in text:
@@ -64,13 +61,11 @@ def data(url):
             elif "Tamaño" in text or "Área" in text:
                 property_data["Tamano de la propiedad"] = extract_value(text)
 
-        # Extraer la información de la dirección (Área)
         for addr in addr_list:
             text = addr.text.strip()
             if "Zona" in text or "Área" in text:
                 property_data["Area"] = extract_full_text(text)
 
-        # Extraer la categoría
         if cat_list:
             property_data["Categoria"] = cat_list[0].text.strip()
 
@@ -81,28 +76,28 @@ def data(url):
         return None
 
 
-# Función para obtener todas las URLs de propiedades desde la página principal
-def get_property_urls(main_url):
+# Función para obtener todas las URLs de propiedades desde una página
+def get_property_urls(page_url):
     try:
         headers = {"User-Agent": "Mozilla/5.0"}
-        req = requests.get(main_url, headers=headers, timeout=10)
+        req = requests.get(page_url, headers=headers, timeout=10)
         req.raise_for_status()
 
         soup = BeautifulSoup(req.content, "html.parser")
 
         property_links = []
-        for link in soup.find_all("div", class_="carousel property_unit_carousel slide"):  # Ajusta si es necesario
+        for link in soup.find_all("div", class_="carousel property_unit_carousel slide"):
             a_tag = link.find("a")
             if a_tag and a_tag.get("href"):
                 href = a_tag.get("href")
                 if "http" not in href:
-                    href = main_url.rstrip("/") + "/" + href
+                    href = page_url.rsplit("/", 2)[0] + "/" + href
                 property_links.append(href)
 
         return property_links
 
     except requests.RequestException as e:
-        print(f"Error al acceder a {main_url}: {e}")
+        print(f"Error al acceder a {page_url}: {e}")
         return []
 
 
@@ -122,24 +117,39 @@ def save_to_csv(property_data, filename='datos3.csv'):
         writer = csv.DictWriter(file, fieldnames=headers)
 
         if not file_exists:
-            writer.writeheader()  # Escribe encabezados si el archivo no existe
+            writer.writeheader()
 
-        writer.writerow(property_data)  # Guarda la propiedad en el CSV
+        writer.writerow(property_data)
 
 
-# URL de la página principal donde están listadas las propiedades
-main_url = "https://mapainmueble.com/casas-en-alquiler-zona-14/page/4/"  # Reemplázala si es necesario
+# URL base de la página de propiedades
+base_url = "https://mapainmueble.com/casas-en-alquiler-carretera-a-el-salvador/page/{}/"
 
-# Obtener todas las URLs de las propiedades
-property_urls = get_property_urls(main_url)
+page = 1
+all_property_urls = []
+
+while True:
+    page_url = base_url.format(page)
+    print(f"🔎 Explorando página {page}: {page_url}")
+
+    property_urls = get_property_urls(page_url)
+
+    if not property_urls:  # Si ya no hay más propiedades, detenemos el bucle
+        print("🚀 No se encontraron más propiedades. Fin de la extracción.")
+        break
+
+    all_property_urls.extend(property_urls)
+    page += 1
+    time.sleep(1)  # Espera 1 segundo para evitar bloqueos
+
 
 # Procesar cada propiedad y guardar los datos en CSV
-for idx, url in enumerate(property_urls):
-    print(f"Procesando {idx + 1}/{len(property_urls)}: {url}")
+for idx, url in enumerate(all_property_urls):
+    print(f"📌 Procesando {idx + 1}/{len(all_property_urls)}: {url}")
     property_data = data(url)
 
     if property_data:
         save_to_csv(property_data)
-        time.sleep(1)  # Pausa para evitar bloqueos por parte del servidor
+        time.sleep(1)  # Pausa entre solicitudes
 
 print("✅ Extracción completada. Los datos han sido guardados en 'datos3.csv'.")
